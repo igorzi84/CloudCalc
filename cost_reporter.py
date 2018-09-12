@@ -4,6 +4,7 @@
 import argparse
 import boto3
 import json
+import sys
 
 from botocore.exceptions import ClientError
 from collections import Counter
@@ -23,7 +24,6 @@ FLT2 = '[{{"Field": "productFamily", "Value": "Storage", "Type": "TERM_MATCH"}},
 
 
 def get_infra(region, tag_name, tag_value):
-
     client = boto3.client('ec2', region_name=region)
     ec2_resource = boto3.resource('ec2', region_name=region)
     try:
@@ -50,7 +50,7 @@ def get_infra(region, tag_name, tag_value):
     first = itemgetter(0)
     ebs_sums = {(k, sum(item[1] for item in tups_to_sum))
                 for k, tups_to_sum in groupby(sorted(ebs_disks, key=first), key=first)}
-    print('Disks: ')
+    print('SSD disks: ')
     for k, v in ebs_sums:
         print('\t{0: <10} {1: >5}GB'.format(k, v))
 
@@ -60,7 +60,12 @@ def get_infra(region, tag_name, tag_value):
 def get_instance_price(region_name, instance):
     client = boto3.client('pricing', region_name='us-east-1')
     f = FLT.format(r=region_name, t=instance)
-    data = client.get_products(ServiceCode='AmazonEC2', Filters=json.loads(f))
+    try:
+        data = client.get_products(ServiceCode='AmazonEC2', Filters=json.loads(f))
+    except ClientError as error:
+        print("Unexpected error: {}".format(error.response['Error']['Message']))
+        print("Error Code: {}".format(error.response['Error']['Code']))
+        exit(error.response['ResponseMetadata']['HTTPStatusCode'])
     od = json.loads(data['PriceList'][0])['terms']['OnDemand']
     id1 = list(od)[0]
     id2 = list(od[id1]['priceDimensions'])[0]
@@ -70,7 +75,12 @@ def get_instance_price(region_name, instance):
 def get_ebs_price(region_name, type):
     client = boto3.client('pricing', region_name='us-east-1')
     f2 = FLT2.format(r=region_name, e=aws_ebs_volume_types(type))
-    data2 = client.get_products(ServiceCode='AmazonEC2', Filters=json.loads(f2))
+    try:
+        data2 = client.get_products(ServiceCode='AmazonEC2', Filters=json.loads(f2))
+    except ClientError as error:
+        print("Unexpected error: {}".format(error.response['Error']['Message']))
+        print("Error Code: {}".format(error.response['Error']['Code']))
+        exit(error.response['ResponseMetadata']['HTTPStatusCode'])
     od = json.loads(data2['PriceList'][0])['terms']['OnDemand']
     id1 = list(od)[0]
     id2 = list(od[id1]['priceDimensions'])[0]
@@ -121,3 +131,4 @@ if __name__ == "__main__":
     print('Monthly costs for EC2 instances: ${0:.2f}'.format(monthly_instances_cost))
     print('Monthly costs for EBS: ${0}'.format(monthly_ebs_cost))
     print('Total monthly cost: ${0:.2f}'.format(monthly_instances_cost + monthly_ebs_cost))
+
