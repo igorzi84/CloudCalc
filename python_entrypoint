@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+DEBUG=${DEBUG:-0}
+if [ $DEBUG -eq 1 ]; then
+  echo "IMAGE_BUILD_ID: $IMAGE_BUILD_ID"
+  echo "IMAGE_BUILD_TS: $IMAGE_BUILD_TS"
+  echo "Running using args: [$@]"
+fi
+echo "Installing prerequisites"
+pip3 install -r requirements.txt >/dev/null
+echo "Done"
+
+set -- /usr/local/bin/python "$@"
+
+exec "$@"
